@@ -1,5 +1,5 @@
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     var GolestanProvince = Golestan;
-var GolestanProvince_feature = ee.Feature(GolestanProvince, {label: 'Central London'}
+var GolestanProvince_feature = ee.Feature(GolestanProvince, {label: 'Golesten'}
 );
 
 Map.addLayer(GolestanProvince, {},  "Golestan"); 
@@ -95,41 +95,39 @@ var ndviVis = {
 };
 
 // /////////////////////////////// DATA ////////////////////////////
-
-var L8_oliCol = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2');
-
+Map.setCenter(54.0, 33.0, 5);
 //Selecting Landsat 8 2017, since the ground truth for the training is from 2017 Sentinel2
-
-var L8_filtered = L8_oliCol
+var L8_filtered = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
     .filterBounds(Golestan)
     .filter(ee.Filter.calendarRange(05, 2, 'month')) 
     .filter(ee.Filter.eq('IMAGE_QUALITY_OLI', 9))
     .filter(ee.Filter.lt('CLOUD_COVER', 10))
     .sort('CLOUD_COVER',false);
-    
-var L8_2017 = L8_filtered.filterDate('2017-01-01', '2017-12-31');
 
-//put all dates in a list
-var dates = ee.List(L8_2017.aggregate_array("system:time_start"))
-    .map(function(d) { return ee.Date(d)});
-
-// print a list with dates
-//print(dates);
 
 //remove the outlier data from 9th of July 2017
 var start_bad_data = '2017-07-09T00:00:00';
 var end_bad_data = '2017-07-10T00:00:00';
 var bad_data_filter = ee.Filter.date(start_bad_data, end_bad_data);
+var L8_good_data = L8_filtered.filter(bad_data_filter.not());
 
-var L8_2017_good_data = L8_2017.filter(bad_data_filter.not());
-var L8_2017_collection = L8_2017_good_data.map(maskClouds)
+
+var L8_2017 = L8_good_data.filterDate('2017-01-01', '2017-12-31');
+
+//put all dates in a list
+var dates = ee.List(L8_2017.aggregate_array("system:time_start"))
+    .map(function(d) { return ee.Date(d)});
+// print a list with dates
+//print(dates);
+
+
+
+var L8_2017_collection = L8_2017.map(maskClouds)
                                 .map(applyScaleFactors);
 
-print("number of priocessed images in 2017", L8_2017_collection.size());
+print("number of processed images in 2017", L8_2017_collection.size());
 
 var L8_img_2017 = L8_2017_collection.median();
-
-Map.setCenter(54.0, 33.0, 5);
 Map.addLayer(L8_img_2017.clip(Golestan), l8_visualization, 'L8_2017');
 
 var histogram_vis_options = {
@@ -138,11 +136,12 @@ var histogram_vis_options = {
   hAxis: {title: 'Reflectance'},
   vAxis: {title: 'Count'},
   series: {
-    0: {color: 'blue'},
-    1: {color: 'green'},
-    2: {color: 'red'},
-    3: {color: 'magenta'}
+    0: {color: '1d6b99'}, // 
+    1: {color: '0f8755'}, // 
+    2: {color: 'cf513e'}, //  
+    3: {color: 'FF9900'}, // 
   }};
+
 
 //Reduce the region. The region parameter is the Feature geometry.
 var medianDictionary = L8_img_2017.reduceRegion({
@@ -151,7 +150,7 @@ var medianDictionary = L8_img_2017.reduceRegion({
   scale: 400,
   maxPixels: 1e9
 });
-print(medianDictionary);
+//print(medianDictionary);
 
 var hist = ui.Chart.image.histogram(L8_img_2017.select('SR_B[2-5]'), Golestan, 300)
     .setSeriesNames(['blue', 'green', 'red', 'nir'])
@@ -159,9 +158,27 @@ var hist = ui.Chart.image.histogram(L8_img_2017.select('SR_B[2-5]'), Golestan, 3
 
 print(hist);
 
-// // Create and print the chart.
-print(ui.Chart.image.series(L8_2017_collection.select('SR_B[2-5]'), Golestan, ee.Reducer.median(), 300));
+//Create band time series
+var ts_options = { 
+  title: 'Landsat 8 2013 bands time series', 
+  vAxis: {title: 'Bands wavelength'}, 
+  hAxis: {title: 'Time'}, 
+  fontSize: 20,
+  // lineWidth: 1, 
+  // pointSize: 4, 
+  series: { 
+    0: {color: '1d6b99'}, // 
+    1: {color: '0f8755'}, // 
+    2: {color: 'cf513e'}, //  
+    3: {color: 'FF9900'}, // 
+}};
 
+
+var bands_timeseries = ui.Chart.image.series(L8_2017_collection.select('SR_B[2-5]'), Golestan, ee.Reducer.median(), 300)
+   .setSeriesNames(['blue', 'green', 'red', 'nir'])
+   .setOptions(ts_options)
+
+print(bands_timeseries);
 
 
 // Compute EVI and NDVI
@@ -171,63 +188,68 @@ Map.addLayer(evi_2017.clip(Golestan), eviVis, 'EVI_2017');
 var ndvi_2017 = get_l8ndvi(L8_img_2017)
 Map.addLayer(ndvi_2017.clip(Golestan), ndviVis, 'NDVI_2017');
 
-// //2013–Present
-// var L8_2013_preProcessed = L8_oliCol
-//     .filterBounds(Golestan)
-//     .filterDate('2013-01-01','2013-12-31')
-//     .filter(ee.Filter.calendarRange(05, 2, 'month')) 
-//     .filter(ee.Filter.eq('IMAGE_QUALITY_OLI', 9))
-//     .filter(ee.Filter.lt('CLOUD_COVER', 10))
-//     .sort('CLOUD_COVER',false)
+////////////////////////////// 2013  /////////////////////////////
+var L8_2013 = L8_filtered.filterDate('2013-01-01', '2013-12-31');
     
-// var composite_L8_2013_free = L8_2013_preProcessed.map(maskClouds);
-// var l8_collection_2013 = composite_L8_2013_free.map(applyScaleFactors)
-// var L8_img_2013 = l8_collection_2013.median()
+var composite_L8_2013_free = L8_2013.map(maskClouds);
+var l8_collection_2013 = composite_L8_2013_free.map(applyScaleFactors)
+print("number of processed images in 2013", l8_collection_2013.size());
 
-// var visualization = {
-//   bands: ['SR_B4', 'SR_B3', 'SR_B2'],
-//   min: 0.0,
-//   max: 0.3,
-// };
+var L8_img_2013 = l8_collection_2013.median()
 
-// Map.setCenter(54.0, 33.0, 5);
-// //Map.addLayer(L8_img_2013.clip(Golestan), visualization, 'L8_2013');
+Map.addLayer(L8_img_2013.clip(Golestan), l8_visualization, 'L8_2013');
 
-// // var options = {
-// //   title: 'Landsat 8 2013 reflectance histogram, bands Blue',
-// //   fontSize: 20,
-// //   hAxis: {title: 'Reflectance'},
-// //   vAxis: {title: 'Count'},
-// //   series: {
-// //     0: {color: 'blue'},
-// //     1: {color: 'green'},
-// //     2: {color: 'red'},
-// //     3: {color: 'magenta'}
-// //   }};
+var options = {
+  title: 'Landsat 8 2013 reflectance histogram bands',
+  fontSize: 20,
+  hAxis: {title: 'Reflectance'},
+  vAxis: {title: 'Count'},
+  series: {
+    0: {color: '1d6b99'},
+    1: {color: '0f8755'},
+    2: {color: 'cf513e'},
+    3: {color: 'FF9900'}
+  }};
 
 
-// // // Reduce the region. The region parameter is the Feature geometry.
-// // var medianDictionary = L8_img_2013.reduceRegion({
-// //   reducer: ee.Reducer.median(),
-// //   geometry: GolestanProvince_feature.geometry(),
-// //   scale: 400,
-// //   maxPixels: 1e9
-// // });
-// // //print(medianDictionary);
+// Reduce the region. The region parameter is the Feature geometry.
+var medianDictionary = L8_img_2013.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: GolestanProvince_feature.geometry(),
+  scale: 400,
+  maxPixels: 1e9
+});
+//print(medianDictionary);
 
-// // var hist = ui.Chart.image.histogram(L8_img_2013.select('SR_B[2-5]'), Golestan, 300)
-// //     .setSeriesNames(['blue', 'green', 'red', 'nir'])
-// //     .setOptions(options);
+var hist = ui.Chart.image.histogram(L8_img_2013.select('SR_B[2-5]'), Golestan, 300)
+    .setSeriesNames(['blue', 'green', 'red', 'nir'])
+    .setOptions(options);
 
-// // //print(hist);
+print(hist);
 
 
-// // // Create and print the chart.
-// // var bands_timeseries = ui.Chart.image.series(l8_collection_2013.select('SR_B[2-5]'), Golestan, ee.Reducer.median(), 300)
-// //     .setSeriesNames(['blue', 'green', 'red', 'nir'])
-// //     .setOptions(options)
+// Create band time series
 
-// // //print(bands_timeseries);
+  
+var ts_options = { 
+  title: 'Landsat 8 2013 bands time series', 
+  vAxis: {title: 'Bands wavelength'}, 
+  hAxis: {title: 'Time'}, 
+  fontSize: 20,
+  // lineWidth: 1, 
+  // pointSize: 4, 
+  series: { 
+    0: {color: '1d6b99'}, // 
+    1: {color: '0f8755'}, // 
+    2: {color: 'cf513e'}, //  
+    3: {color: 'FF9900'}, // 
+}};
+
+var bands_timeseries = ui.Chart.image.series(l8_collection_2013.select('SR_B[2-5]'), Golestan, ee.Reducer.median(), 300)
+   .setSeriesNames(['blue', 'green', 'red', 'nir'])
+   .setOptions(ts_options)
+
+print(bands_timeseries);
 
 
 // // var wavelengths = [0.45, 0.53, 0.63, 0.85];
