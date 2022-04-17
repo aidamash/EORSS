@@ -62,6 +62,38 @@ var evi = image.expression(
     return evi; // here we use return
 }
 
+function get_l8ndvi(image) {
+  var ndvi = image.select('SR_B5').subtract(L8_img_2017.select('SR_B4'))
+   .divide(L8_img_2017.select('SR_B5').add(L8_img_2017.select('SR_B4')));
+  
+  return ndvi;
+}
+
+var l8_visualization = {
+  bands: ['SR_B4', 'SR_B3', 'SR_B2'],
+  min: 0.0,
+  max: 0.3,
+};
+
+var eviVis = {
+  min: 0.0,
+  max: 1.0,
+palette: [
+    'ffffff', 'ce7e45', 'fcd163', 'c6ca02', '22cc04', '99b718', '207401',
+    '012e01'
+
+  ],
+};
+
+var ndviVis = {
+  min: -1.0,
+  max: 1.0,
+  palette: [
+    'ffffff', 'ce7e45', 'fcd163', 'c6ca02', '22cc04', '99b718', '207401',
+    '012e01'
+  ],
+};
+
 // /////////////////////////////// DATA ////////////////////////////
 
 var L8_oliCol = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2');
@@ -73,16 +105,16 @@ var L8_filtered = L8_oliCol
     .filter(ee.Filter.calendarRange(05, 2, 'month')) 
     .filter(ee.Filter.eq('IMAGE_QUALITY_OLI', 9))
     .filter(ee.Filter.lt('CLOUD_COVER', 10))
-    .sort('CLOUD_COVER',false)
+    .sort('CLOUD_COVER',false);
     
-var L8_2017 = L8_filtered.filterDate('2017-01-01', '2017-12-31')
+var L8_2017 = L8_filtered.filterDate('2017-01-01', '2017-12-31');
 
 //put all dates in a list
 var dates = ee.List(L8_2017.aggregate_array("system:time_start"))
     .map(function(d) { return ee.Date(d)});
 
 // print a list with dates
-print(dates);
+//print(dates);
 
 //remove the outlier data from 9th of July 2017
 var start_bad_data = '2017-07-09T00:00:00';
@@ -93,18 +125,12 @@ var L8_2017_good_data = L8_2017.filter(bad_data_filter.not());
 var L8_2017_collection = L8_2017_good_data.map(maskClouds)
                                 .map(applyScaleFactors);
 
-print("number of priocessed images in 2017", L8_2017_collection.size())
+print("number of priocessed images in 2017", L8_2017_collection.size());
 
-var L8_img_2017 = L8_2017_collection.median()
-
-var visualization = {
-  bands: ['SR_B4', 'SR_B3', 'SR_B2'],
-  min: 0.0,
-  max: 0.3,
-};
+var L8_img_2017 = L8_2017_collection.median();
 
 Map.setCenter(54.0, 33.0, 5);
-Map.addLayer(L8_img_2017.clip(Golestan), visualization, 'L8_2017');
+Map.addLayer(L8_img_2017.clip(Golestan), l8_visualization, 'L8_2017');
 
 var histogram_vis_options = {
   title: 'Landsat 8 2017 reflectance histogram bands',
@@ -138,35 +164,12 @@ print(ui.Chart.image.series(L8_2017_collection.select('SR_B[2-5]'), Golestan, ee
 
 
 
-// Compute EVI.
+// Compute EVI and NDVI
 var evi_2017 = get_l8evi(L8_img_2017);
-
-var eviVis = {
-  min: 0.0,
-  max: 1.0,
-palette: [
-    'ffffff', 'ce7e45', 'fcd163', 'c6ca02', '22cc04', '99b718', '207401',
-    '012e01'
-
-  ],
-};
-
 Map.addLayer(evi_2017.clip(Golestan), eviVis, 'EVI_2017');
 
-// // create ndvi image using mathematical operators
-// var ndvi_2017 = L8_img_2017.select('SR_B5').subtract(L8_img_2017.select('SR_B4'))
-//   .divide(L8_img_2017.select('SR_B5').add(L8_img_2017.select('SR_B4')));
-
-// var ndviVis = {
-//   min: -1.0,
-//   max: 1.0,
-//   palette: [
-//     'ffffff', 'ce7e45', 'fcd163', 'c6ca02', '22cc04', '99b718', '207401',
-//     '012e01'
-//   ],
-// };
-
-// Map.addLayer(ndvi_2017.clip(Golestan), ndviVis, 'NDVI_2017');
+var ndvi_2017 = get_l8ndvi(L8_img_2017)
+Map.addLayer(ndvi_2017.clip(Golestan), ndviVis, 'NDVI_2017');
 
 // //2013–Present
 // var L8_2013_preProcessed = L8_oliCol
