@@ -180,6 +180,22 @@ var bands_timeseries = ui.Chart.image.series(L8_2017_collection.select('SR_B[2-5
 
 print(bands_timeseries);
 
+var wavelengths = [0.45, 0.53, 0.63, 0.85];
+
+var options = {
+  title: 'Landsat 8 2017 spectra',
+  hAxis: {title: 'Wavelength (micrometers)', 
+  ticks:[0, 0.25, 0.50, 0.75, 1.0]},
+  vAxis: {title: 'Reflectance'},
+  lineWidth: 1,
+  pointSize: 4,
+};
+var spec_SR = ui.Chart.image.regions(
+    L8_img_2017.select('SR_B[2-5]'), Golestan, ee.Reducer.mean(), 300, 'label', wavelengths)
+        .setChartType('ScatterChart')
+        .setOptions(options);
+print(spec_SR);
+
 
 // Compute EVI and NDVI
 var evi_2017 = get_l8evi(L8_img_2017);
@@ -252,33 +268,26 @@ var bands_timeseries = ui.Chart.image.series(l8_collection_2013.select('SR_B[2-5
 print(bands_timeseries);
 
 
-// // var wavelengths = [0.45, 0.53, 0.63, 0.85];
+var wavelengths = [0.45, 0.53, 0.63, 0.85];
 
-// // var options = {
-// //   title: 'Landsat 8 spectra',
-// //   hAxis: {title: 'Wavelength (micrometers)', 
-// //   ticks:[0, 0.25, 0.50, 0.75, 1.0]},
-// //   vAxis: {title: 'Reflectance'},
-// //   lineWidth: 1,
-// //   pointSize: 4,
-// // };
-// // var spec_SR = ui.Chart.image.regions(
-// //     L8_img_2013.select('SR_B[2-5]'), Golestan, ee.Reducer.mean(), 300, 'label', wavelengths)
-// //         .setChartType('ScatterChart')
-// //         .setOptions(options);
-// // print(spec_SR);
+var options = {
+  title: 'Landsat 8 2013 spectra',
+  hAxis: {title: 'Wavelength (micrometers)', 
+  ticks:[0, 0.25, 0.50, 0.75, 1.0]},
+  vAxis: {title: 'Reflectance'},
+  lineWidth: 1,
+  pointSize: 4,
+};
+var spec_SR = ui.Chart.image.regions(
+    L8_img_2013.select('SR_B[2-5]'), Golestan, ee.Reducer.mean(), 300, 'label', wavelengths)
+        .setChartType('ScatterChart')
+        .setOptions(options);
+print(spec_SR);
 
 
-// // create ndvi image using mathematical operators
-// var ndvi_2013 = L8_img_2013.select('SR_B5').subtract(L8_img_2013.select('SR_B4'))
-//   .divide(L8_img_2013.select('SR_B5').add(L8_img_2013.select('SR_B4')));
+// Compute EVI and NDVI
+var evi_2013 = get_l8evi(L8_img_2013);
+Map.addLayer(evi_2013.clip(Golestan), eviVis, 'EVI_2013');
 
-// var evi_2013 = L8_img_2013.expression(
-//   '2.5 * ((NIR-RED) / (NIR + 6 * RED - 7.5* BLUE +1))', {
-//     NIR:L8_img_2013.select('SR_B5'),
-//     RED:L8_img_2013.select('SR_B4'),
-//     BLUE:L8_img_2013.select('SR_B2')
-//   });
-
-// Map.addLayer(evi_2013.clip(Golestan), eviVis, 'EVI_2013');
-// Map.addLayer(ndvi_2013.clip(Golestan), ndviVis, 'NDVI_2013');
+var ndvi_2013 = get_l8ndvi(L8_img_2013)
+Map.addLayer(ndvi_2013.clip(Golestan), ndviVis, 'NDVI_2013');
