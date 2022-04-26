@@ -5,59 +5,28 @@ var GolestanProvince_feature = ee.Feature(GolestanProvince, {label: 'Golesten'}
 Map.addLayer(GolestanProvince, {},  "Golestan"); 
 
 // /////////////////////////////// FUNCTIONS ////////////////////////////
-var getQABits = function(image, start, end, newName) {
-    // Compute the bits we need to extract.
-    var pattern = 0;
-    for (var i = start; i <= end; i++) {
-      pattern += Math.pow(2, i);
-    }
-    // Return a single band image of the extracted QA bits, giving the band
-    // a new name.
-    return image.select([0], [newName])
-                  .bitwiseAnd(pattern)
-                  .rightShift(start);
-};
+// Define a function that scales and masks Landsat 8 surface reflectance images
+// and adds an NDVI band.
+function prepSrL8(image) {
+  // Develop masks for unwanted pixels (fill, cloud, cloud shadow).
+  var qaMask = image.select('QA_PIXEL').bitwiseAnd(parseInt('11111', 2)).eq(0);
+  var saturationMask = image.select('QA_RADSAT').eq(0);
 
-// A function to mask out cloudy pixels.
-var cloud_shadows = function(image) {
-  // Select the QA band.
-  var QA = image.select(['QA_PIXEL']);
-  // Get the internal_cloud_algorithm_flag bit.
-  return getQABits(QA, 3,3, 'cloud_shadows').eq(0);
-  // Return an image masking out cloudy areas.
-};
-
-// A function to mask out cloudy pixels.
-var clouds = function(image) {
-  // Select the QA band.
-  var QA = image.select(['QA_PIXEL']);
-  // Get the internal_cloud_algorithm_flag bit.
-  return getQABits(QA, 5,5, 'cloud').eq(0);
-  // Return an image masking out cloudy areas.
-};
-
-var maskClouds = function(image) {
-  var cs = cloud_shadows(image);
-  var c = clouds(image);
-  image = image.updateMask(cs);
-  return image.updateMask(c);
-};
-
-// Applies scaling factors.
-function applyScaleFactors(image) {
+  // Apply the scaling factors to the appropriate bands.
   var opticalBands = image.select('SR_B.').multiply(0.0000275).add(-0.2);
   var thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0);
+
+  // Calculate NDVI.
+  var ndvi = opticalBands.normalizedDifference(['SR_B5', 'SR_B4'])
+      .rename('NDVI');
+
+  // Replace original bands with scaled bands, add NDVI band, and apply masks.
   return image.addBands(opticalBands, null, true)
-              .addBands(thermalBands, null, true);
+      .addBands(thermalBands, null, true)
+      .addBands(ndvi)
+      .updateMask(qaMask)
+      .updateMask(saturationMask);
 }
-
-
-var addNDVI_l8 = function(image) {
-  var ndvi = image.select('SR_B5').subtract(image.select('SR_B4'))
-   .divide(image.select('SR_B5').add(image.select('SR_B4'))).rename('NDVI');
-  return image.addBands(ndvi);
-};
-
 
 var l8_visualization = {
   bands: ['SR_B4', 'SR_B3', 'SR_B2'],
@@ -76,6 +45,7 @@ var ndviVis = {
 
 // /////////////////////////////// DATA ////////////////////////////
 Map.setCenter(54.0, 33.0, 5);
+
 //Selecting Landsat 8 2017, since the ground truth for the training is from 2017 Sentinel2
 var L8_filtered = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
     .filterBounds(Golestan)
@@ -98,21 +68,22 @@ var L8_2017 = L8_good_data.filterDate('2017-01-01', '2017-12-31');
 var dates = ee.List(L8_2017.aggregate_array("system:time_start"))
     .map(function(d) { return ee.Date(d)});
 // print a list with dates
-//print(dates);
+print(dates);
 
 
 
-var L8_2017_collection = L8_2017.map(maskClouds)
-                                .map(applyScaleFactors)
-                                .map(addNDVI_l8)
+var L8_2017_collection = L8_2017.map(prepSrL8)
                                 .map(function(image){return image.clip(Golestan)});
                                 
-//print(L8_2017_collection, 'Image Collection with NDVI');
+print(L8_2017_collection, 'Image Collection with NDVI');
 
-//print("number of processed images in 2017", L8_2017_collection.size());
+print("number of processed images in 2017", L8_2017_collection.size());
 
 var L8_img_2017 = L8_2017_collection.median();
-//Map.addLayer(L8_img_2017, l8_visualization, 'L8_2017');
+// Add the False Color 1 visualization.
+var ls_fc1 = {bands: ['SR_B6','SR_B5','SR_B4'], min: 0, max: 0.3, gamma: 0.9};
+Map.addLayer(L8_img_2017, ls_fc1, 'False Color 1');
+Map.addLayer(L8_img_2017, l8_visualization, 'L8_2017');
 
 var histogram_vis_options = {
   title: 'Landsat 8 2017 reflectance histogram bands',
@@ -134,13 +105,13 @@ var medianDictionary = L8_img_2017.reduceRegion({
   scale: 400,
   maxPixels: 1e9
 });
-//print(medianDictionary);
+print(medianDictionary);
 
 var hist = ui.Chart.image.histogram(L8_img_2017.select('SR_B[2-5]'), Golestan, 300)
     .setSeriesNames(['blue', 'green', 'red', 'nir'])
     .setOptions(histogram_vis_options);
 
-//print(hist);
+print(hist);
 
 //Create band time series
 var ts_options = { 
@@ -162,7 +133,7 @@ var bands_timeseries = ui.Chart.image.series(L8_2017_collection.select('SR_B[2-5
   .setSeriesNames(['blue', 'green', 'red', 'nir'])
   .setOptions(ts_options);
 
-//print(bands_timeseries);
+print(bands_timeseries);
 
 var wavelengths = [0.45, 0.53, 0.63, 0.85];
 
@@ -178,7 +149,7 @@ var spec_SR = ui.Chart.image.regions(
     L8_img_2017.select('SR_B[2-5]'), Golestan, ee.Reducer.mean(), 300, 'label', wavelengths)
         .setChartType('ScatterChart')
         .setOptions(options);
-//print(spec_SR);
+print(spec_SR);
 
 
 // Compute NDVI
@@ -192,12 +163,10 @@ Map.addLayer(ndvi_2017, ndviVis, 'NDVI 2017', false);
 var L8_2013 = L8_filtered.filterDate('2013-01-01', '2013-12-31');
     
 
-var L8_2013_collection = L8_2013.map(maskClouds)
-                                .map(applyScaleFactors)
-                                .map(addNDVI_l8)
+var L8_2013_collection = L8_2013.map(prepSrL8)
                                 .map(function(image){return image.clip(Golestan)});
                                 
-//print("number of processed images in 2013", L8_2013_collection.size());
+print("number of processed images in 2013", L8_2013_collection.size());
 
 var L8_img_2013 = L8_2013_collection.median();
 
@@ -223,13 +192,13 @@ var medianDictionary = L8_img_2013.reduceRegion({
   scale: 400,
   maxPixels: 1e9
 });
-//print(medianDictionary);
+print(medianDictionary);
 
 var hist = ui.Chart.image.histogram(L8_img_2013.select('SR_B[2-5]'), Golestan, 300)
     .setSeriesNames(['blue', 'green', 'red', 'nir'])
     .setOptions(options);
 
-//print(hist);
+print(hist);
 
 
 // Create band time series
@@ -253,7 +222,7 @@ var bands_timeseries = ui.Chart.image.series(L8_2013_collection.select('SR_B[2-5
   .setSeriesNames(['blue', 'green', 'red', 'nir'])
   .setOptions(ts_options)
 
-//print(bands_timeseries);
+print(bands_timeseries);
 
 
 var wavelengths = [0.45, 0.53, 0.63, 0.85];
@@ -270,7 +239,7 @@ var spec_SR = ui.Chart.image.regions(
     L8_img_2013.select('SR_B[2-5]'), Golestan, ee.Reducer.mean(), 300, 'label', wavelengths)
         .setChartType('ScatterChart')
         .setOptions(options);
-//print(spec_SR);
+print(spec_SR);
 
 
 
@@ -278,7 +247,7 @@ var spec_SR = ui.Chart.image.regions(
 var ndvi_2013 = L8_2013_collection.select('NDVI');
 print(ndvi_2013, 'NDVI 2013')
 Map.addLayer(ndvi_2013, ndviVis, 'NDVI 2013', false);
-//Map.addLayer(ndvi_2013.median(), ndviVis, 'MEDIAN NDVI 2013', false);
+Map.addLayer(ndvi_2013.median(), ndviVis, 'MEDIAN NDVI 2013', false);
 
 
 
@@ -322,7 +291,7 @@ Map.addLayer(post_event_ic, ndviVis, 'Post-Event IC 2017', false);
 var chart_pre_event = ui.Chart.image.series({
   imageCollection: pre_event_ic,
   region: Golestan,
-  reducer: ee.Reducer.mean(),
+  reducer: ee.Reducer.median(),
   scale: 300
 })
 .setOptions({
@@ -337,7 +306,7 @@ print(chart_pre_event)
 var chart_post_event = ui.Chart.image.series({
   imageCollection: post_event_ic,
   region: Golestan,
-  reducer: ee.Reducer.mean(),
+  reducer: ee.Reducer.median(),
   scale: 300
 })
 .setOptions({
@@ -460,12 +429,12 @@ pre_arealist.push({Class: name, Pixels: pix, Hectares: hect, Percentage: perc});
 };
 
 // Create a list that contains the NDVI class names (7 classes, ranging from [-0.2, 0, 0.1, 0.2, 0.3, 0.4, 1])
-var names2 = ['Water', 'No Vegetation', 'Very Low Vegetation',
-'Low Vegetation', 'Moderate Vegetation','Moderate-high Vegetation', 'High Vegetation'];
-
+// var names2 = ['Water', 'No Vegetation', 'Very Low Vegetation',
+// 'Low Vegetation', 'Moderate Vegetation','Moderate-high Vegetation', 'High Vegetation'];
+var names = ['Water', 'Barren and/built up', 'vegetation']
 // execute function for each class
-for (var i = 0; i < 7; i++) {
-  areacount(i, names2[i]);
+for (var i = 0; i < 3; i++) {
+  areacount(i, names[i]);
   }
 
 //Print the results to the Console and examine it.
@@ -502,12 +471,13 @@ post_arealist.push({Class: name, Pixels: pix, Hectares: hect, Percentage: perc})
 };
 
 // Create a list that contains the NDVI class names (7 classes, ranging from [-0.2, 0, 0.1, 0.2, 0.3, 0.4, 1])
-var names2 = ['Water', 'No Vegetation', 'Very Low Vegetation',
-'Low Vegetation', 'Moderate Vegetation','Moderate-high Vegetation', 'High Vegetation'];
+// var names2 = ['Water', 'No Vegetation', 'Very Low Vegetation',
+// 'Low Vegetation', 'Moderate Vegetation','Moderate-high Vegetation', 'High Vegetation'];
+var names = ['Water', 'Barren and/built up', 'vegetation']
 
 // execute function for each class
-for (var i = 0; i < 7; i++) {
-  areacount(i, names2[i]);
+for (var i = 0; i < 3; i++) {
+  areacount(i, names[i]);
   }
 
 //Print the results to the Console and examine it.
