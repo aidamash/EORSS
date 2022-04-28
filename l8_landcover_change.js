@@ -173,9 +173,24 @@ var validation = sample.filter(ee.Filter.gte('random', split));
 print(training.size());
 print(validation.size());
 
+// Spatial join.
+var distFilter = ee.Filter.withinDistance({
+  distance: 1000,
+  leftField: '.geo',
+  rightField: '.geo',
+  maxError: 10
+});
+
+var join = ee.Join.inverted();
+
+// Apply the join.
+training = join.apply(training, validation, distFilter);
+print(training.size());
+
+
 
 // Make a Random Forest classifier and train it.
-var classifier = ee.Classifier.smileRandomForest(25)
+var classifier = ee.Classifier.smileRandomForest(10)
     .train({
       features: training,
       classProperty: 'landcover',
@@ -201,6 +216,20 @@ var testAccuracy = validated.errorMatrix('landcover', 'classification');
 print('Validation error matrix: ', testAccuracy);
 print('Validation overall accuracy: ', testAccuracy.accuracy());
 
+var OAV = testAccuracy.accuracy();
+var UAV = testAccuracy.consumersAccuracy();
+var PAV = testAccuracy.producersAccuracy();
+var Kappa = testAccuracy.kappa();
+
+print('Performance  metrics - Minimun distance classifier'); print('Error Matrix:', testAccuracy);
+print('Overall Accuracy:', OAV);
+print('User Accuracy:', UAV);
+print('Producer Accuracy:', PAV);
+print('Kappa Coefficient: ', Kappa);
+
+
+
+
 var options = {
 lineWidth: 1,
 pointSize: 2,
@@ -224,13 +253,3 @@ var areaChart = ui.Chart.image.byClass({
 })
 .setOptions(options)
 print(areaChart);
-
-var dataset = ee.Image("KNTU/LiDARLab/IranLandCover/V1");
-
-var visualization = {
-  bands: ['classification']
-};
-
-Map.setCenter(54.0, 33.0, 5);
-
-Map.addLayer(dataset, visualization, "Classification");
