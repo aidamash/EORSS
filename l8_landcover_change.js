@@ -61,13 +61,37 @@ print("number of processed images in 2013", L8_2013_collection.size());
 
 
 
-var iranLC = ee.Image("KNTU/LiDARLab/IranLandCover/V1").select('classification').rename('landcover');
+var iranLC = ee.Image("KNTU/LiDARLab/IranLandCover/V1")
+.select('classification')
+.rename('landcover')
+.clip(aoi);
+
+var minMax = iranLC.reduceRegion({
+    reducer: ee.Reducer.minMax(),
+    geometry: aoi,
+    scale: 30,
+    maxPixels: 1e10
+})
+
+print('Min & Max all bands: ', minMax)
 
 var visualization = {
   bands: ['landcover']
 };
 //  Palette with the colors
-var palette =['000000',  '006eff',  '41a661',  'ff7f7f',  'bee8ff',  'ff00c5',  'ff0000',  '00734c',  '732600',  'ffaa00',  'd3ffbe',  '446589',  'cccccc'];
+var palette =['000000',
+              '006eff',
+              '41a661',
+              'ff7f7f',
+              'bee8ff',
+              'ff00c5',
+              'ff0000',
+              '00734c',
+              '732600', 
+              'ffaa00', 
+              'd3ffbe', 
+              '446589', 
+              'cccccc'];
 
 // name of the legend
 var names = ['Urban', 'Water', 'Wetland', 'Kalut (yardang)', 'Marshland', 'Salty Land', 'Clay', 'Forest', 'Outcrop', 'Uncovered Plain', 'Sand', 'Farm Land', 'Range Land'];
@@ -123,7 +147,7 @@ var makeRow = function(color, name) {
 for (var i = 0; i < 13; i++) {
   legend.add(makeRow(palette[i], names[i]));
   }  
-Map.addLayer(iranLC, {min:0, max:13 , palette:['000000',  '006eff',  '41a661',  'ff7f7f',  'bee8ff',  'ff00c5',  'ff0000',  '00734c',  '732600',  'ffaa00',  'd3ffbe',  '446589',  'cccccc']}, "landcover");
+Map.addLayer(iranLC, {min:1, max:13 , palette:['000000',  '006eff',  '41a661',  'ff7f7f',  'bee8ff',  'ff00c5',  'ff0000',  '00734c',  '732600',  'ffaa00',  'd3ffbe',  '446589',  'cccccc']}, "landcover");
 // add legend to map (alternatively you can also print the legend to the console)  
 Map.add(legend);  
  
@@ -176,3 +200,37 @@ print('validated', validated);
 var testAccuracy = validated.errorMatrix('landcover', 'classification');
 print('Validation error matrix: ', testAccuracy);
 print('Validation overall accuracy: ', testAccuracy.accuracy());
+
+var options = {
+lineWidth: 1,
+pointSize: 2,
+colors: palette,
+SeriesNames: [
+          'Urban', 'Water', 'Wetland', 'Kalut (yardang)', 'Marshland', 'Salty Land', 'Clay', 'Forest', 'Outcrop', 'Uncovered Plain', 'Sand', 'Farm Land', 'Range Land'],
+hAxis: {title: 'Classes'},
+vAxis: {title: 'Sum of pixels area'},
+title: 'sum of pixels in each class in square km.'
+
+}; 
+
+
+var areaChart = ui.Chart.image.byClass({
+  image: ee.Image.pixelArea().addBands(classified),
+  classBand: 'classification', 
+  region: aoi,
+  scale: 300,
+  reducer: ee.Reducer.sum()/1000
+
+})
+.setOptions(options)
+print(areaChart);
+
+var dataset = ee.Image("KNTU/LiDARLab/IranLandCover/V1");
+
+var visualization = {
+  bands: ['classification']
+};
+
+Map.setCenter(54.0, 33.0, 5);
+
+Map.addLayer(dataset, visualization, "Classification");
